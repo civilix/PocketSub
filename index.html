@@ -167,7 +167,7 @@
          * @returns {Array} Array of subtitle objects {start, end, text}
          */
         function parseSRT(text) {
-            const regex = /(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) -->(\d{ 2}: \d{ 2}: \d{ 2}, \d{ 3}) \n([\s\S] *?)(?=\n\n |\n * $) / g;
+            const regex = /(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})\s+([\s\S]*?)(?=\n\s*\n|$)/g;
             const result = [];
             let match;
             while ((match = regex.exec(text)) !== null) {
