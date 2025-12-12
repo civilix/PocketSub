@@ -562,30 +562,47 @@
             // Calculate which item is selected
             const itemHeight = 50;
             const scrollTop = subtitleWheel.scrollTop;
-            const centerOffset = 125; // Half of container height
-
-            // Index = (ScrollTop + HalfContainer - HalfItem) / ItemHeight
-            const selectedIndex = Math.round((scrollTop + 125 - 25) / itemHeight);
+            // Center is at 125px.
+            // Item top = index * 50. Item center = index * 50 + 25.
+            // We want match: scrollTop + 125 = index * 50 + 25.
+            // scrollTop + 100 = index * 50
+            // index = (scrollTop + 100) / 50
+            const selectedIndex = Math.round((scrollTop + 100) / 50);
 
             if (selectedIndex >= 0 && selectedIndex < subtitles.length) {
                 const targetSub = subtitles[selectedIndex];
 
-                // The Logic:
-                // We want 'targetSub.start' to equal 'currentTime'.
-                // Shift = currentTime - targetSub.start
-                const shiftAmount = currentTime - targetSub.start;
+                // USER REQUEST: "Jump to correct time"
+                // Instead of shifting subtitles (editing), we Sync the PLAYER to the Subtitle.
+                // Use Case: User hears line on TV, scrolls to line on App, clicks Confirm -> App jumps to that line.
+                currentTime = targetSub.start;
 
-                // Apply shift to ALL subtitles logic
-                subtitles.forEach(sub => {
-                    sub.start += shiftAmount;
-                    sub.end += shiftAmount;
-                });
+                // Update display immediately
+                updateDisplay();
 
-                // Construct feedback toast
-                const dir = shiftAmount > 0 ? '+' : '';
-                // alert(`Shifted by ${dir}${shiftAmount}ms`);
-                // Better UI feedback handled by display update
+                // Visual feedback (Toast)
+                showToast(`Jumped to ${msToTimeStr(currentTime)}`);
             }
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.innerText = msg;
+            Object.assign(toast.style, {
+                position: 'fixed',
+                bottom: '100px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(0,0,0,0.8)',
+                color: '#fff',
+                padding: '8px 16px',
+                borderRadius: '20px',
+                fontSize: '14px',
+                zIndex: '100',
+                backdropFilter: 'blur(4px)'
+            });
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
         }
 
         function updateDisplay() {
@@ -598,6 +615,9 @@
                     subtitleDisplay.textContent = currentSub.text;
                     subtitleDisplay.style.opacity = 1;
                 } else {
+                    // Show next subtitle preview or ...?
+                    // Let's show emptiness or the nearest one?
+                    // Standard: Empty if gap.
                     subtitleDisplay.textContent = '...';
                     subtitleDisplay.style.opacity = 0.5;
                 }
