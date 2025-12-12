@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PocketSub - Mobile Subtitle Assistant</title>
+    <style>
+        /* * GLOBAL STYLES
+         * Background set to pure black (#000) for OLED power saving
+         * and better viewing experience in dark environments.
+         */
+        body {
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            /* Prevent scrolling */
+        }
+
+        /* * SUBTITLE DISPLAY AREA
+         * Flexbox used to center text vertically and horizontally.
+         */
+        #subtitle-display {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #FFD700;
+            /* Gold color, standard for subtitles */
+            text-shadow: 2px 2px 4px #000;
+            line-height: 1.4;
+        }
+
+        /* * STATUS BAR
+         * Displays current time and sync offset.
+         */
+        #status-bar {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            padding: 5px;
+        }
+
+        /* * TOP CONTROLS
+         * File import and Play/Pause buttons.
+         */
+        .controls-top {
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            background: #111;
+        }
+
+        /* * BOTTOM CONTROLS (SYNC ADJUSTMENT)
+         * Large touch targets for easy thumb interaction.
+         */
+        .controls-bottom {
+            padding: 20px;
+            display: flex;
+            gap: 10px;
+            background: #111;
+            height: 80px;
+        }
+
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            /* Disable text selection on buttons for app-like feel */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        button:active {
+            background: #555;
+        }
+
+        .btn-file {
+            flex: 1;
+        }
+
+        .btn-play {
+            flex: 1;
+            background: #28a745;
+            border-color: #28a745;
+        }
+
+        /* * ADJUSTMENT BUTTONS
+         * Layout optimized for quick tapping.
+         */
+        .btn-adjust {
+            flex: 1;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-adjust span {
+            font-size: 12px;
+            font-weight: normal;
+            color: #aaa;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="controls-top">
+        <input type="file" id="fileInput" accept=".srt" style="display:none">
+        <button class="btn-file" onclick="document.getElementById('fileInput').click()">📂 导入字幕 (.srt)</button>
+        <div style="width:10px"></div>
+        <button id="playBtn" class="btn-play" onclick="togglePlay()">▶ 开始</button>
+    </div>
+
+    <div id="subtitle-display">
+        Waiting for file...<br>
+        <span style="font-size:14px; color:#666; font-weight:normal">(Please rotate to Landscape)</span>
+    </div>
+
+    <div id="status-bar">
+        Time: 00:00:00 | Offset: 0ms
+    </div>
+
+    <div class="controls-bottom">
+        <button class="btn-adjust" onclick="adjustOffset(-500)">
+            ⏪ 慢点 (Delay)
+            <span>-0.5s</span>
+        </button>
+        <button class="btn-adjust" onclick="adjustOffset(500)">
+            ⏩ 快点 (Hasten)
+            <span>+0.5s</span>
+        </button>
+    </div>
+
+    <script>
+        // --- Global State Variables ---
+        let subtitles = [];          // Array to store parsed subtitle objects
+        let isPlaying = false;       // Playback state flag
+        let startTime = 0;           // Timestamp when playback started (performance.now)
+        let pauseTime = 0;           // Timestamp when playback was paused
+        let globalOffset = 0;        // User-defined offset in milliseconds
+        let animationFrameId;        // Reference for the requestAnimationFrame loop
+
+        /**
+         * PARSE SRT FUNCTION
+         * Simple regex-based parser for .srt format.
+         * Extracts index, start time, end time, and text content.
+         * @param {string} text - Raw SRT file content
+         * @returns {Array} Array of subtitle objects {start, end, text}
+         */
+        function parseSRT(text) {
+            const regex = /(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) -->(\d{ 2}: \d{ 2}: \d{ 2}, \d{ 3}) \n([\s\S] *?)(?=\n\n |\n * $) / g;
+            const result = [];
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                result.push({
+                    start: timeToMs(match[2]),
+                    end: timeToMs(match[3]),
+                    text: match[4].trim()
+                });
+            }
+            return result;
+        }
+
+        /**
+         * UTILITY: Time String to Milliseconds
+         * Converts "00:00:01,500" format to integer milliseconds.
+         */
+        function timeToMs(timeStr) {
+            const [h, m, s] = timeStr.split(':');
+            const [sec, ms] = s.split(',');
+            return (parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(sec)) * 1000 + parseInt(ms);
+        }
+
+        /**
+         * UTILITY: Milliseconds to Readable Time String
+         * Formats milliseconds back to "HH:MM:SS" for display.
+         */
+        function formatTime(ms) {
+            if (ms < 0) ms = 0;
+            const date = new Date(ms);
+            return date.toISOString().substr(11, 8); // Extracts HH:MM:SS
+        }
+
+        // --- Event Listener: File Import ---
+        document.getElementById('fileInput').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                // Parse the file content
+                subtitles = parseSRT(e.target.result);
+                // Update UI feedback
+                document.getElementById('subtitle-display').innerText =
+                    `Loaded ${subtitles.length} lines.\nTap '开始' to sync.`;
+            };
+            reader.readAsText(file);
+        });
+
+        // --- Core Logic: Play/Pause Toggle ---
+        function togglePlay() {
+            const btn = document.getElementById('playBtn');
+            if (isPlaying) {
+                // Pause Logic
+                isPlaying = false;
+                pauseTime = performance.now(); // Record when we paused
+                cancelAnimationFrame(animationFrameId); // Stop the render loop
+                btn.innerText = "▶ 继续";
+                btn.style.backgroundColor = "#28a745";
+            } else {
+                // Play Logic
+                isPlaying = true;
+                if (startTime === 0) {
+                    // First time play
+                    startTime = performance.now();
+                } else {
+                    // Resume logic: Adjust startTime to account for the paused duration
+                    startTime += (performance.now() - pauseTime);
+                }
+                loop(); // Start the render loop
+                btn.innerText = "⏸ 暂停";
+                btn.style.backgroundColor = "#e0a800";
+            }
+        }
+
+        /**
+         * ADJUST OFFSET (The Axis Tuner)
+         * Adjusts the global time offset to sync subtitles with video.
+         * @param {number} ms - Milliseconds to add/subtract (e.g., 500 or -500)
+         */
+        function adjustOffset(ms) {
+            globalOffset += ms;
+            updateStatus();
+
+            // Visual Feedback (Toast notification)
+            const toast = document.createElement('div');
+            Object.assign(toast.style, {
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'rgba(255,255,255,0.2)',
+                padding: '10px 20px',
+                borderRadius: '20px',
+                fontSize: '14px',
+                color: '#fff',
+                pointerEvents: 'none' // Click-through
+            });
+
+            const direction = ms > 0 ? "Early (+)" : "Delayed (-)";
+            toast.innerText = `Sync: ${direction} ${Math.abs(ms)}ms`;
+            document.body.appendChild(toast);
+
+            // Remove toast after animation
+            setTimeout(() => toast.remove(), 800);
+        }
+
+        // --- UI Update: Status Bar ---
+        function updateStatus(currentTime = 0) {
+            const offsetText = globalOffset > 0 ? `+${globalOffset}ms` : `${globalOffset}ms`;
+            document.getElementById('status-bar').innerText =
+                `Video Time: ${formatTime(currentTime)} | Offset: ${offsetText}`;
+        }
+
+        /**
+         * RENDER LOOP
+         * Uses requestAnimationFrame for high-precision timing.
+         * Calculates current video time based on elapsed real-world time + user offset.
+         */
+        function loop() {
+            if (!isPlaying) return;
+
+            const now = performance.now();
+
+            // Calculate effective time: (Real elapsed time) + (User offset)
+            // If User Offset is positive (+500ms), we look up subtitles 0.5s into the future
+            // If User Offset is negative, we delay the subtitle lookup
+            const elapsedTime = now - startTime;
+            const lookupTime = elapsedTime + globalOffset;
+
+            // Find the subtitle that matches the current lookup time
+            // Note: For large files, binary search would be faster, but find() is okay for MVP
+            const currentSubtitle = subtitles.find(sub => lookupTime >= sub.start && lookupTime <= sub.end);
+
+            const display = document.getElementById('subtitle-display');
+            if (currentSubtitle) {
+                // Convert newlines in text to HTML break tags
+                display.innerHTML = currentSubtitle.text.replace(/\n/g, '<br>');
+            } else {
+                // Clear display if no subtitle matches current time
+                display.innerText = "";
+            }
+
+            updateStatus(elapsedTime);
+            animationFrameId = requestAnimationFrame(loop);
+        }
+    </script>
+</body>
+
+</html>
