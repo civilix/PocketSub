@@ -162,21 +162,24 @@
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: var(--primary-color);
-            border: none;
-            color: white;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
             font-size: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(10, 132, 255, 0.4);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             transition: all 0.2s ease;
         }
 
         .play-btn:hover {
+            background: rgba(44, 44, 46, 0.9);
             transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(10, 132, 255, 0.5);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            border-color: var(--primary-color);
         }
 
         .play-btn:active {
