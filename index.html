@@ -307,8 +307,9 @@
     <div id="upload-container">
         <label class="drop-zone" id="drop-zone">
             <span class="drop-icon">📂</span>
-            <span class="drop-text">Tap or Drag & Drop Subtitle (.srt)</span>
-            <input type="file" id="file-input" accept=".srt,.vtt,.txt,text/*" hidden>
+            <span class="drop-text">Tap to Upload Subtitle</span>
+            <!-- Removing accept attribute to fix iOS grayed out files issue -->
+            <input type="file" id="file-input" hidden>
         </label>
     </div>
     <!-- Editor View -->
@@ -425,7 +426,7 @@
         function parseSRT(data) {
             const subs = [];
             // Regex to handle CRLF and varying spaces more robustly
-            const regex = /(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})\s+([\s\S]*?)(?=\n\s*\n|$)/g;
+            const regex = /(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{ 2 }: \d{ 2 }: \d{ 2 }, \d{ 3 }) \s + ([\s\S] *?)(?=\n\s *\n | $) / g;
             let match;
             while ((match = regex.exec(data)) !== null) {
                 subs.push({
